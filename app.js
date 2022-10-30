@@ -5,7 +5,7 @@ const connection = require('./conn');
 const bcrypt = require('bcrypt');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
-const pusher = require('pusher');
+const pusher = require('./config')
 
 const app = Express();
 app.use(bodyParser.urlencoded({
@@ -25,17 +25,17 @@ app.get('/users', authenticateToken, (req, res) => {
     });
 });
 
-app.get('/users/:id', (req, res) => {
+app.get('/users/:id', authenticateToken, (req, res) => {
     connection.query('select id, name from users where id = ?', [req.params.id], (error, results, fields) => {
         if(error) res.status(500).send('something went wrong');
         res.status(200).send(results);
     });
 });
 
-app.delete('/users/:id', (req, res) => {
+app.delete('/users/:id', authenticateToken, (req, res) => {
     connection.query('delete from users where id = ?', [req.params.id], (error, results, fields) => {
         if(error) res.status(500).send('something went wrong');
-        res.status(200).send('deleted');
+        res.status(204).send('deleted');
     });
 });
 
@@ -77,6 +77,11 @@ app.post('/login', async(req, res) => {
     });
 });
 
+app.delete('/logout', (req, res) => {
+    refreshToken = refreshTokens.filter(x => x !== req.body.token);
+    res.sendStatus(204);
+});
+
 app.post('/token', (req, res) => {
     const refreshToken = req.body.token;
     if (!refreshToken) return res.sendStatus(401);
@@ -85,6 +90,60 @@ app.post('/token', (req, res) => {
         if (err) res.sendStatus(403);
         const accessToken = generateAccestoken({name: user.name, password: user.password})
         res.status(200).send({accessToken: accessToken});
+    });
+});
+
+app.post('/chatRooms', authenticateToken, (req, res) => {
+    connection.query("insert into chat_rooms (name) values(?)", [req.body.name], (error, results, fields) => {
+        if (error) res.status(500).send("something went wrong");
+        res.status(201).send('created');
+    });
+});
+
+app.get('/chatRooms', authenticateToken, (req, res) => {
+    connection.query('select id, name from chat_rooms', (error, results, fields) => {
+        if(error) res.status(500).send('something went wrong');
+        res.status(200).send(results);
+    });
+});
+
+app.get('/chatRooms/:id', authenticateToken, (req, res) => {
+    connection.query('select id, name from chat_rooms where id = ?', [req.params.id], (error, results, fields) => {
+        if(error) res.status(500).send('something went wrong');
+        res.status(200).send(results);
+    });
+});
+
+app.post('/userTyping', function(req, res) {
+    const username = req.body.username;
+    pusher.trigger(chatChannel, userIsTypingEvent, {username: username});
+    res.status(200).send();
+});
+
+app.post('/messages', authenticateToken, async(req, res) => {
+    await pusher.trigger("chat", "message", {
+        username: req.body.username,
+        message: req.body.message
+    });
+
+    connection.query("insert into chat_messages (chat_room_id, user_id, message) values(?, ?, ?)", [req.body.roomId, req.body.userId, req.body.message], 
+    (error, results, fields) => {
+        if (error) res.status(500).send("something went wrong");
+        res.status(201).send('created');
+    });
+});
+
+app.get('/messages', authenticateToken, (req, res) => {
+    connection.query('select id, chat_room_id, user_id, message from chat_messages', (error, results, fields) => {
+        if(error) res.status(500).send('something went wrong');
+        res.status(200).send(results);
+    });
+});
+
+app.get('/messages/:id', authenticateToken, (req, res) => {
+    connection.query('select  id, chat_room_id, user_id, message from chat_messages where id = ?', [req.params.id], (error, results, fields) => {
+        if(error) res.status(500).send('something went wrong');
+        res.status(200).send(results);
     });
 });
 
