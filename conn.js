@@ -29,6 +29,27 @@ connection.connect(err => {
         user_id int not null,
         message varchar(8000) not null,
         timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
+
+        create table if not exists messages(
+            id int primary key auto_increment,
+            session_id int not null,
+            content text not null,
+            username varchar(100) not null,
+            timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
+
+        create table if not exists chats(
+            id int primary key auto_increment,
+            session_id int not null,
+            message_id int not null,
+            user_id int not null,
+            type int not null,
+            timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
+
+        create table if not exists sessions(
+            id int primary key auto_increment,
+            user1_id int not null,
+            user2_id int not null,
+            timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
     `;
 
     connection.query(createTables, (error, results, fields) => {
