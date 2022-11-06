@@ -34,7 +34,7 @@ connection.connect(err => {
             id int primary key auto_increment,
             session_id int not null,
             content text not null,
-            username varchar(100) not null,
+            from_user_id varchar(100) not null,
             timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
 
         create table if not exists chats(

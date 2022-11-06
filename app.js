@@ -139,14 +139,17 @@ app.post('/messages', authenticateToken, async(req, res) => {
     const sessionId = req.body.sessionId;
     const userName = req.body.username;
     const channelName = req.body.chanelName ? req.body.chanelName : `private-chat-${fromUserId}-${toUserId}`;
-
+    await pusher.trigger('presence-forum', `new-message-to-${toUserId}`, {
+        fromUserId: fromUserId,
+        message: message
+    });
     await pusher.trigger(channelName, "message", {
         fromUserId: fromUserId,
         toUserId: toUserId,
         message: message,
         userName: userName
     }).then(e => {
-        connection.query("insert into messages (session_id, content, username) values(?, ?, ?)", [sessionId, message, userName], 
+        connection.query("insert into messages (session_id, content, from_user_id) values(?, ?, ?)", [sessionId, message, fromUserId], 
         (error, results, fields) => {
             if (error) res.status(500).send("something went wrong");
             let sql = "insert into chats (session_id, message_id, user_id, type) values(?, ?, ?, ?)"
@@ -238,9 +241,9 @@ app.post("/sessions", authenticateToken, async(req, res) => {
     await pusher.trigger( channels, 'one-to-one-chat-request', eventData ).then(s => {
         connection.query('select * from sessions where user1_id in (?, ?) and  user2_id in (?, ?)', [user_one_id, user_two_id, user_one_id, user_two_id], (error, result, fields) => {
             if(result.length > 0) {
-                let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, m.username as uname,
+                let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, u.name as uname,
                 m.content as message, s.id as sessionId from chats chat inner join messages m on chat.message_id = m.id
-                inner join sessions s on chat.session_id = s.id where s.id = ?`;
+                inner join users u on m.from_user_id = u.id inner join sessions s on chat.session_id = s.id where s.id = ?`;
                 connection.query(sql1, [result[0].id], (error, results, fields) => {
                     let messages = results;
                     res.status(200).send({id: result[0].id, messages: messages});
@@ -264,9 +267,9 @@ app.post("/sessionMessages", authenticateToken, (req, res) => {
 
     connection.query('select * from sessions where user1_id in (?, ?) and  user2_id in (?, ?)', [user_one_id, user_two_id, user_one_id, user_two_id], (error, result, fields) => {
         if(result.length > 0) {
-            let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, m.username as uname,
+            let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, u.name as uname,
             m.content as message, s.id as sessionId from chats chat inner join messages m on chat.message_id = m.id
-            inner join sessions s on chat.session_id = s.id where s.id = ?`;
+            inner join users u on m.from_user_id = u.id inner join sessions s on chat.session_id = s.id where s.id = ?`;
             connection.query(sql1, [result[0].id], (error, results, fields) => {
                 let messages = results;
                 res.status(200).send({id: result[0].id, messages: messages});
