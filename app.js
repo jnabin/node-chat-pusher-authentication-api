@@ -124,8 +124,6 @@ app.get('/chatRooms/:id', authenticateToken, (req, res) => {
 app.post('/userTyping', function(req, res) {
     const username = req.body.username;
     const fromUser = req.body.fromUserId;
-    const userOneId = req.body.user_one_id;
-    const userTwoId = req.body.user_two_id;
     const channelName = req.body.chanelName ? req.body.chanelName : `private-chat-${fromUserId}-${toUserId}`;
 
     pusher.trigger(channelName, 'user_typing', {username: username, userId: fromUser});
@@ -137,11 +135,15 @@ app.post('/messages', authenticateToken, async(req, res) => {
     const toUserId = req.body.toUserId;
     const message = req.body.message;
     const sessionId = req.body.sessionId;
+    const groupChartId = req.body.groupChatId;
     const userName = req.body.username;
     const channelName = req.body.chanelName ? req.body.chanelName : `private-chat-${fromUserId}-${toUserId}`;
-    await pusher.trigger('presence-forum', `new-message-to-${toUserId}`, {
+    let event = sessionId == null ? `group-new-message` : `new-message-to-${toUserId}`;
+    await pusher.trigger('presence-forum', event, {
         fromUserId: fromUserId,
-        message: message
+        groupId: groupChartId,
+        message: message,
+        isGroup: sessionId == null
     });
     await pusher.trigger(channelName, "message", {
         fromUserId: fromUserId,
@@ -149,22 +151,26 @@ app.post('/messages', authenticateToken, async(req, res) => {
         message: message,
         userName: userName
     }).then(e => {
-        connection.query("insert into messages (session_id, content, from_user_id) values(?, ?, ?)", [sessionId, message, fromUserId], 
+        connection.query("insert into messages (session_id, group_chat_id, content, from_user_id) values(?, ?, ?, ?)", [sessionId, groupChartId, message, fromUserId], 
         (error, results, fields) => {
             if (error) res.status(500).send("something went wrong");
             let sql = "insert into chats (session_id, message_id, user_id, type) values(?, ?, ?, ?)"
             const mid = results.insertId;
-            connection.query(sql, [sessionId, mid, fromUserId, 0], 
-            (error, results, fields) => {
-                if (error) res.status(500).send('something went wrong');
-                connection.query(sql, [sessionId, mid, toUserId, 1], 
+            if(sessionId == null) res.status(201).send(mid.toString());
+
+            else {
+                connection.query(sql, [sessionId, mid, fromUserId, 0], 
                     (error, results, fields) => {
-                        console.log(error);
-                        console.log(results);
                         if (error) res.status(500).send('something went wrong');
-                        res.status(201).send(error);
+                        connection.query(sql, [sessionId, mid, toUserId, 1], 
+                            (error, results, fields) => {
+                                console.log(error);
+                                console.log(results);
+                                if (error) res.status(500).send('something went wrong');
+                                res.status(201).send(mid.toString());
+                            });
                     });
-            });
+            }
 
         });
 
@@ -229,10 +235,9 @@ app.post("/sessions", authenticateToken, async(req, res) => {
     const user_two_id = req.body.user_two_id;
     const from_user_id = req.body.from_user_id;
     const to_user_id = req.body.to_user_id;
-    console.log('hitted');
-    var channels = [ `private-notifications-${user_one_id}`, `private-notifications-${user_two_id}` ];
-    console.log(channels);
-    var eventData = {
+
+    let channels = [ `private-notifications-${user_one_id}`, `private-notifications-${user_two_id}` ];
+    let eventData = {
                     'channel_name': `private-chat-${user_one_id}-${user_two_id}`,
                     'initiated_by': from_user_id,
                     'chat_with'   : to_user_id
@@ -284,6 +289,186 @@ app.post("/sessionMessages", authenticateToken, (req, res) => {
     });
 });
 
+app.post("/groupMessages", authenticateToken, (req, res) => {
+    const groupId = req.body.groupId;
+
+    let sql1 = `select m.id as messageId, m.content as message, u.id as userId, u.name as uname, 
+                g.id as groupId, g.name as groupName from group_chats g 
+                inner join messages m on m.group_chat_id = g.id
+                inner join users u on m.from_user_id = u.id
+                where session_id is null and g.id = ?`;
+    connection.query(sql1, [groupId], (error, results, fields) => {
+        if(error) res.status(500).send('something went wrong');
+        let messages = results;
+        res.status(200).send({messages: messages});
+    });
+});
+
+app.post("/groupMessagesWithChannel", authenticateToken, async(req, res) => {
+    const groupId = req.body.groupId;
+    const userIds = req.body.userIds;
+    const fromUserId = req.body.fromUserId;
+
+    var channels = [];
+    userIds.forEach(id => {
+        channels.push(`private-notifications-${id}`);
+    })
+
+    let eventData = {
+        'channel_name': `private-group-chat-${groupId}`,
+        'initiated_by': fromUserId,
+        'chat_with_ids'   : userIds,
+        'groupId': groupId
+        };
+    await pusher.trigger(channels, 'group-chat-request', eventData);
+
+    let sql1 = `select m.id as messageId, m.content as message, u.id as userId, u.name as uname, 
+                g.id as groupId, g.name as groupName from group_chats g 
+                inner join messages m on m.group_chat_id = g.id
+                inner join users u on m.from_user_id = u.id
+                where session_id is null and g.id = ?`;
+    connection.query(sql1, [groupId], (error, results, fields) => {
+        if(error) res.status(500).send('something went wrong');
+        let messages = results;
+        res.status(200).send({messages: messages});
+    });
+});
+
+app.get('/groups', authenticateToken, (req, res) => {
+    let sql = `SELECT gc.id as groupId, gc.name as groupName, u.id as userId, u.name as userName
+    FROM users AS u
+    INNER JOIN groups_users AS gu ON u.id = gu.user_id
+    INNER JOIN group_chats AS gc ON gu.group_id = gc.id
+    ORDER BY gc.name ASC`;
+
+    connection.query(sql, (error, results, fields) => {
+        if(error) res.status(500).send('something went wrong');
+        res.status(200).send(results);
+    });
+});
+
+app.get('/groups/:id', authenticateToken, (req, res) => {
+    let sql = `SELECT gc.id as groupId, gc.name as groupName, u.id as userId, u.name as userName
+    FROM users AS u
+    INNER JOIN groups_users AS gu ON u.id = gu.user_id
+    INNER JOIN group_chats AS gc ON gu.group_id = gc.id
+    where gc.id = ?`;
+    connection.query(sql, [req.params.id], (error, results, fields) => {
+        if(error) res.status(500).send('something went wrong');
+        res.status(200).send(results);
+    });
+});
+
+app.get('/usersByGroup/:id', authenticateToken, (req, res) => {
+    let sql = `SELECT u.id as userId, u.name as userName
+    FROM users AS u
+    INNER JOIN groups_users AS gu ON u.id = gu.user_id
+    INNER JOIN group_chats AS gc ON gu.group_id = gc.id
+    where gc.id = ?`;
+    connection.query(sql, [req.params.id], (error, results, fields) => {
+        if(error) res.status(500).send('something went wrong');
+        res.status(200).send(results);
+    });
+});
+
+app.get('/groupsByUser/:id', authenticateToken, (req, res) => {
+    let sql = `SELECT gc.id as groupId, gc.name as groupName
+    FROM users AS u
+    INNER JOIN groups_users AS gu ON u.id = gu.user_id
+    INNER JOIN group_chats AS gc ON gu.group_id = gc.id
+    where u.id = ?`;
+    connection.query(sql, [req.params.id], (error, results, fields) => {
+        if(error) res.status(500).send('something went wrong');
+        console.log(results);
+        res.status(200).send(results);
+    });
+});
+
+app.delete('/groups/:id', authenticateToken, (req, res) => {
+    connection.query('delete from group_chats where id = ?', [req.params.id], (error, results, fields) => {
+        if(error) res.status(500).send('something went wrong');
+        res.status(204).send('deleted');
+    });
+});
+
+app.post('/groups', async(req, res) => {
+    try {
+        const userIds = req.body.userIds;
+        const fromUserId = req.body.fromUserId;
+
+        var channels = [];
+        userIds.forEach(id => {
+            channels.push(`private-notifications-${id}`);
+        })
+
+        connection.query(`insert into group_chats (name) values(?)`, [req.body.name], 
+        async(error, results, fields) => {
+            if(error) res.status(500).send('something went wrong');
+            let groupId = results.insertId;
+            let eventData = {
+                'channel_name': `private-group-chat-${groupId}`,
+                'initiated_by': fromUserId,
+                'chat_with_ids'   : userIds,
+                'groupId': groupId
+                };
+            await pusher.trigger(channels, 'group-chat-request', eventData);
+
+            await Promise.all(
+                userIds.map((_, i) => {
+                    return queryPromise(
+                        `insert into groups_users (user_id, group_id) values(?, ?)`, [userIds[i], groupId]
+                    );
+                })
+            ).then(e => {
+                res.status(200).send(groupId.toString());
+            }).catch(err => {
+                console.log(err);
+                res.status(500).send('something went wrong');
+            });
+        });
+    } catch(exc) {
+        console.log(exc);
+        res.status(500).send('something went wrong');
+    }
+});
+
+app.put('/groups', (req, res) => {
+    try{
+        const groupId = req.body.groupId;
+        const userIds = req.body.userIds;
+        const name = req.body.name;
+        const isUpdateUsers = req.body.isUpdateUsers;
+
+        connection.query('update group_chats set name = ? where id = ?', [name, groupId], async(error, results, fields) => {
+            if(error) res.status(500).send('something went wrong');
+            if(isUpdateUsers) {
+                await Promise.all(queryPromise('delete from groups_users where group_id = ?', [groupId]))
+                .catch(err => {
+                    console.log(err);
+                    res.status(500).send('something went wrong');
+                });
+                await Promise.all(
+                    userIds.map((_, i) => {
+                        return queryPromise(
+                            `insert into groups_users (user_id, group_id) values(?, ?)`, [userIds[i], groupId]
+                        );
+                    })
+                ).catch(err => {
+                    console.log(err);
+                    res.status(500).send('something went wrong');
+                });
+
+                res.status(200).send('updated');
+            } else {
+                res.status(200).send('updated');
+            }
+        });
+    } catch(exc) {
+        console.log(exc);
+        res.status(500).send('something went wrong');
+    }
+});
+
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -302,6 +487,19 @@ function addMinutes(numOfMinutes, date = new Date()) {
   
     return date;
   }
+
+function queryPromise(query, insertValues) {
+    return new Promise((resolve, reject) => {
+        connection.query(query, insertValues, (err, result) => {
+            if (err) {
+                console.log(err);
+                return reject(err);
+            }
+
+            return resolve(result);
+        });
+    });
+ }
 
 const port = process.env.port || 3000;
 app.listen(port, () => console.log(`Express is running at port: ${port}`));

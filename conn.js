@@ -1,4 +1,4 @@
-const mysql = require('mysql');
+const mysql = require('mysql2');
 const connection = mysql.createConnection({
     host: 'localhost',
     user: 'root',
@@ -33,7 +33,8 @@ connection.connect(err => {
 
         create table if not exists messages(
             id int primary key auto_increment,
-            session_id int not null,
+            session_id int null,
+            group_chat_id int null,
             content text not null,
             from_user_id varchar(100) not null,
             timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
@@ -50,6 +51,17 @@ connection.connect(err => {
             id int primary key auto_increment,
             user1_id int not null,
             user2_id int not null,
+            timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
+        
+            create table if not exists group_chats(
+                id int primary key auto_increment,
+                name varchar(255) not null,
+                timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
+        
+            create table if not exists groups_users(
+            id int primary key auto_increment,
+            user_id int not null,
+            group_id int not null,
             timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
     `;
 
