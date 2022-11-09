@@ -409,7 +409,8 @@ app.post('/groups', async(req, res) => {
                 'channel_name': `private-group-chat-${groupId}`,
                 'initiated_by': fromUserId,
                 'chat_with_ids'   : userIds,
-                'groupId': groupId
+                'groupId': groupId,
+                'groupName': req.body.name
                 };
             await pusher.trigger(channels, 'group-chat-request', eventData);
 
