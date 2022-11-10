@@ -137,7 +137,10 @@ app.post('/messages', authenticateToken, async(req, res) => {
     const sessionId = req.body.sessionId;
     const groupChartId = req.body.groupChatId;
     const userName = req.body.username;
+    const messageType = req.body.messageType;
+    const parentMessageId = req.body.parentMessageId;
     const channelName = req.body.chanelName ? req.body.chanelName : `private-chat-${fromUserId}-${toUserId}`;
+
     let event = sessionId == null ? `group-new-message` : `new-message-to-${toUserId}`;
     await pusher.trigger('presence-forum', event, {
         fromUserId: fromUserId,
@@ -149,10 +152,15 @@ app.post('/messages', authenticateToken, async(req, res) => {
         fromUserId: fromUserId,
         toUserId: toUserId,
         message: message,
-        userName: userName
+        userName: userName,
+        messageType: messageType,
+        parentMessageId: parentMessageId
     }).then(e => {
-        connection.query("insert into messages (session_id, group_chat_id, content, from_user_id) values(?, ?, ?, ?)", [sessionId, groupChartId, message, fromUserId], 
+        connection.query("insert into messages (session_id, group_chat_id, content, from_user_id, message_type, parent_message_id) values(?, ?, ?, ?, ?, ?)", 
+        [sessionId, groupChartId, message, fromUserId, messageType, parentMessageId], 
         (error, results, fields) => {
+            console.log(error);
+            console.log(results);
             if (error) res.status(500).send("something went wrong");
             let sql = "insert into chats (session_id, message_id, user_id, type) values(?, ?, ?, ?)"
             const mid = results.insertId;
@@ -164,8 +172,6 @@ app.post('/messages', authenticateToken, async(req, res) => {
                         if (error) res.status(500).send('something went wrong');
                         connection.query(sql, [sessionId, mid, toUserId, 1], 
                             (error, results, fields) => {
-                                console.log(error);
-                                console.log(results);
                                 if (error) res.status(500).send('something went wrong');
                                 res.status(201).send(mid.toString());
                             });
@@ -246,7 +252,7 @@ app.post("/sessions", authenticateToken, async(req, res) => {
     await pusher.trigger( channels, 'one-to-one-chat-request', eventData ).then(s => {
         connection.query('select * from sessions where user1_id in (?, ?) and  user2_id in (?, ?)', [user_one_id, user_two_id, user_one_id, user_two_id], (error, result, fields) => {
             if(result.length > 0) {
-                let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, u.name as uname,
+                let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, m.timestamps as time, u.name as uname,
                 m.content as message, s.id as sessionId from chats chat inner join messages m on chat.message_id = m.id
                 inner join users u on m.from_user_id = u.id inner join sessions s on chat.session_id = s.id where s.id = ?`;
                 connection.query(sql1, [result[0].id], (error, results, fields) => {
@@ -272,7 +278,7 @@ app.post("/sessionMessages", authenticateToken, (req, res) => {
 
     connection.query('select * from sessions where user1_id in (?, ?) and  user2_id in (?, ?)', [user_one_id, user_two_id, user_one_id, user_two_id], (error, result, fields) => {
         if(result.length > 0) {
-            let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, u.name as uname,
+            let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, m.timestamps as time, u.name as uname,
             m.content as message, s.id as sessionId from chats chat inner join messages m on chat.message_id = m.id
             inner join users u on m.from_user_id = u.id inner join sessions s on chat.session_id = s.id where s.id = ?`;
             connection.query(sql1, [result[0].id], (error, results, fields) => {
@@ -292,7 +298,7 @@ app.post("/sessionMessages", authenticateToken, (req, res) => {
 app.post("/groupMessages", authenticateToken, (req, res) => {
     const groupId = req.body.groupId;
 
-    let sql1 = `select m.id as messageId, m.content as message, u.id as userId, u.name as uname, 
+    let sql1 = `select m.id as messageId, m.content as message, m.timestamps as time, u.id as userId, u.name as uname, 
                 g.id as groupId, g.name as groupName from group_chats g 
                 inner join messages m on m.group_chat_id = g.id
                 inner join users u on m.from_user_id = u.id
@@ -322,7 +328,7 @@ app.post("/groupMessagesWithChannel", authenticateToken, async(req, res) => {
         };
     await pusher.trigger(channels, 'group-chat-request', eventData);
 
-    let sql1 = `select m.id as messageId, m.content as message, u.id as userId, u.name as uname, 
+    let sql1 = `select m.id as messageId, m.content as message, m.timestamps as time, u.id as userId, u.name as uname, 
                 g.id as groupId, g.name as groupName from group_chats g 
                 inner join messages m on m.group_chat_id = g.id
                 inner join users u on m.from_user_id = u.id

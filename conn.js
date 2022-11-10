@@ -37,6 +37,8 @@ connection.connect(err => {
             group_chat_id int null,
             content text not null,
             from_user_id varchar(100) not null,
+            message_type varchar(20) default 'direct',
+            parent_message_id int null,
             timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
 
         create table if not exists chats(
