@@ -252,8 +252,8 @@ app.post("/sessions", authenticateToken, async(req, res) => {
     await pusher.trigger( channels, 'one-to-one-chat-request', eventData ).then(s => {
         connection.query('select * from sessions where user1_id in (?, ?) and  user2_id in (?, ?)', [user_one_id, user_two_id, user_one_id, user_two_id], (error, result, fields) => {
             if(result.length > 0) {
-                let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, m.timestamps as time, u.name as uname,
-                m.content as message, s.id as sessionId from chats chat inner join messages m on chat.message_id = m.id
+                let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, m.message_type as messageType, m.parent_message_id as parentMessageId,
+                 m.timestamps as time, u.name as uname, m.content as message, s.id as sessionId from chats chat inner join messages m on chat.message_id = m.id
                 inner join users u on m.from_user_id = u.id inner join sessions s on chat.session_id = s.id where s.id = ?`;
                 connection.query(sql1, [result[0].id], (error, results, fields) => {
                     let messages = results;
@@ -278,7 +278,8 @@ app.post("/sessionMessages", authenticateToken, (req, res) => {
 
     connection.query('select * from sessions where user1_id in (?, ?) and  user2_id in (?, ?)', [user_one_id, user_two_id, user_one_id, user_two_id], (error, result, fields) => {
         if(result.length > 0) {
-            let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, m.timestamps as time, u.name as uname,
+            let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, m.message_type as messageType, m.parent_message_id as parentMessageId,
+             m.timestamps as time, u.name as uname,
             m.content as message, s.id as sessionId from chats chat inner join messages m on chat.message_id = m.id
             inner join users u on m.from_user_id = u.id inner join sessions s on chat.session_id = s.id where s.id = ?`;
             connection.query(sql1, [result[0].id], (error, results, fields) => {
@@ -298,7 +299,8 @@ app.post("/sessionMessages", authenticateToken, (req, res) => {
 app.post("/groupMessages", authenticateToken, (req, res) => {
     const groupId = req.body.groupId;
 
-    let sql1 = `select m.id as messageId, m.content as message, m.timestamps as time, u.id as userId, u.name as uname, 
+    let sql1 = `select m.id as messageId, m.message_type as messageType, m.parent_message_id as parentMessageId,
+                m.content as message, m.timestamps as time, u.id as userId, u.name as uname, 
                 g.id as groupId, g.name as groupName from group_chats g 
                 inner join messages m on m.group_chat_id = g.id
                 inner join users u on m.from_user_id = u.id
@@ -328,7 +330,8 @@ app.post("/groupMessagesWithChannel", authenticateToken, async(req, res) => {
         };
     await pusher.trigger(channels, 'group-chat-request', eventData);
 
-    let sql1 = `select m.id as messageId, m.content as message, m.timestamps as time, u.id as userId, u.name as uname, 
+    let sql1 = `select m.id as messageId, m.message_type as messageType, m.parent_message_id as parentMessageId,
+                m.content as message, m.timestamps as time, u.id as userId, u.name as uname, 
                 g.id as groupId, g.name as groupName from group_chats g 
                 inner join messages m on m.group_chat_id = g.id
                 inner join users u on m.from_user_id = u.id
