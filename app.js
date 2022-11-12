@@ -148,42 +148,46 @@ app.post('/messages', authenticateToken, async(req, res) => {
         message: message,
         isGroup: sessionId == null
     });
-    await pusher.trigger(channelName, "message", {
-        fromUserId: fromUserId,
-        toUserId: toUserId,
-        message: message,
-        userName: userName,
-        messageType: messageType,
-        parentMessageId: parentMessageId
-    }).then(e => {
-        connection.query("insert into messages (session_id, group_chat_id, content, from_user_id, message_type, parent_message_id) values(?, ?, ?, ?, ?, ?)", 
-        [sessionId, groupChartId, message, fromUserId, messageType, parentMessageId], 
-        (error, results, fields) => {
-            console.log(error);
-            console.log(results);
-            if (error) res.status(500).send("something went wrong");
-            let sql = "insert into chats (session_id, message_id, user_id, type) values(?, ?, ?, ?)"
-            const mid = results.insertId;
-            if(sessionId == null) res.status(201).send(mid.toString());
 
-            else {
-                connection.query(sql, [sessionId, mid, fromUserId, 0], 
-                    (error, results, fields) => {
-                        if (error) res.status(500).send('something went wrong');
-                        connection.query(sql, [sessionId, mid, toUserId, 1], 
-                            (error, results, fields) => {
-                                if (error) res.status(500).send('something went wrong');
-                                res.status(201).send(mid.toString());
-                            });
-                    });
-            }
+    connection.query("insert into messages (session_id, group_chat_id, content, from_user_id, message_type, parent_message_id) values(?, ?, ?, ?, ?, ?)", 
+    [sessionId, groupChartId, message, fromUserId, messageType, parentMessageId], 
+    async(error, results, fields) => {
+        console.log(error);
+        console.log(results);
+        if (error) res.status(500).send("something went wrong");
 
+        let sql = "insert into chats (session_id, message_id, user_id, type) values(?, ?, ?, ?)"
+        const mid = results.insertId;
+
+        await pusher.trigger(channelName, "message", {
+            fromUserId: fromUserId,
+            toUserId: toUserId,
+            message: message,
+            messageId: mid,
+            userName: userName,
+            messageType: messageType,
+            parentMessageId: parentMessageId
+        }).catch(err => {
+            console.log(err);
+            res.status(500).send('something went wrong');
         });
 
-    }).catch(err => {
-        console.log(err);
-        res.status(500).send('something went wrong');
+        if(sessionId == null) res.status(201).send(mid.toString());
+
+        else {
+            connection.query(sql, [sessionId, mid, fromUserId, 0], 
+                (error, results, fields) => {
+                    if (error) res.status(500).send('something went wrong');
+                    connection.query(sql, [sessionId, mid, toUserId, 1], 
+                        (error, results, fields) => {
+                            if (error) res.status(500).send('something went wrong');
+                            res.status(201).send(mid.toString());
+                        });
+                });
+        }
+
     });
+
 });
 
 app.get('/messages', authenticateToken, (req, res) => {
@@ -299,7 +303,7 @@ app.post("/sessionMessages", authenticateToken, (req, res) => {
 app.post("/groupMessages", authenticateToken, (req, res) => {
     const groupId = req.body.groupId;
 
-    let sql1 = `select m.id as messageId, m.message_type as messageType, m.parent_message_id as parentMessageId,
+    let sql1 = `select m.id as mid, m.message_type as messageType, m.parent_message_id as parentMessageId,
                 m.content as message, m.timestamps as time, u.id as userId, u.name as uname, 
                 g.id as groupId, g.name as groupName from group_chats g 
                 inner join messages m on m.group_chat_id = g.id
@@ -330,7 +334,7 @@ app.post("/groupMessagesWithChannel", authenticateToken, async(req, res) => {
         };
     await pusher.trigger(channels, 'group-chat-request', eventData);
 
-    let sql1 = `select m.id as messageId, m.message_type as messageType, m.parent_message_id as parentMessageId,
+    let sql1 = `select m.id as mid, m.message_type as messageType, m.parent_message_id as parentMessageId,
                 m.content as message, m.timestamps as time, u.id as userId, u.name as uname, 
                 g.id as groupId, g.name as groupName from group_chats g 
                 inner join messages m on m.group_chat_id = g.id
