@@ -124,7 +124,7 @@ app.get('/chatRooms/:id', authenticateToken, (req, res) => {
 app.post('/userTyping', function(req, res) {
     const username = req.body.username;
     const fromUser = req.body.fromUserId;
-    const channelName = req.body.chanelName ? req.body.chanelName : `private-chat-${fromUserId}-${toUserId}`;
+    const channelName = req.body.chanelName ? req.body.chanelName : getPrivateChanelFromUsersId(fromUserId, toUserId);
 
     pusher.trigger(channelName, 'user_typing', {username: username, userId: fromUser});
     res.status(200).send();
@@ -139,7 +139,7 @@ app.post('/messages', authenticateToken, async(req, res) => {
     const userName = req.body.username;
     const messageType = req.body.messageType;
     const parentMessageId = req.body.parentMessageId;
-    const channelName = req.body.chanelName ? req.body.chanelName : `private-chat-${fromUserId}-${toUserId}`;
+    const channelName = req.body.chanelName ? req.body.chanelName : getPrivateChanelFromUsersId(fromUserId, toUserId);
 
     let event = sessionId == null ? `group-new-message` : `new-message-to-${toUserId}`;
     await pusher.trigger('presence-forum', event, {
@@ -248,7 +248,7 @@ app.post("/sessions", authenticateToken, async(req, res) => {
 
     let channels = [ `private-notifications-${user_one_id}`, `private-notifications-${user_two_id}` ];
     let eventData = {
-                    'channel_name': `private-chat-${user_one_id}-${user_two_id}`,
+                    'channel_name': getPrivateChanelFromUsersId(user_one_id, user_two_id),
                     'initiated_by': from_user_id,
                     'chat_with'   : to_user_id
                     };
@@ -330,7 +330,8 @@ app.post("/groupMessagesWithChannel", authenticateToken, async(req, res) => {
         'channel_name': `private-group-chat-${groupId}`,
         'initiated_by': fromUserId,
         'chat_with_ids'   : userIds,
-        'groupId': groupId
+        'groupId': groupId,
+        'newGroup' : false
         };
     await pusher.trigger(channels, 'group-chat-request', eventData);
 
@@ -423,7 +424,8 @@ app.post('/groups', async(req, res) => {
                 'initiated_by': fromUserId,
                 'chat_with_ids'   : userIds,
                 'groupId': groupId,
-                'groupName': req.body.name
+                'groupName': req.body.name,
+                'newGroup' : true
                 };
             await pusher.trigger(channels, 'group-chat-request', eventData);
 
@@ -513,6 +515,10 @@ function queryPromise(query, insertValues) {
             return resolve(result);
         });
     });
+ }
+
+ function getPrivateChanelFromUsersId(userOneId, userTwoId){
+    return userOneId > userTwoId ? `private-chat-${userOneId}-${userTwoId}` : `private-chat-${userTwoId}-${userOneId}`;
  }
 
 const port = process.env.port || 3000;
