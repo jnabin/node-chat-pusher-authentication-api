@@ -38,6 +38,7 @@ connection.connect(err => {
             content text not null,
             from_user_id varchar(100) not null,
             message_type varchar(20) default 'direct',
+            is_edited bit default 0,
             parent_message_id int null,
             timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
 

@@ -149,7 +149,7 @@ app.post('/messages', authenticateToken, async(req, res) => {
         isGroup: sessionId == null
     });
 
-    connection.query("insert into messages (session_id, group_chat_id, content, from_user_id, message_type, parent_message_id) values(?, ?, ?, ?, ?, ?)", 
+    connection.query(insertMessageQuery(), 
     [sessionId, groupChartId, message, fromUserId, messageType, parentMessageId], 
     async(error, results, fields) => {
         console.log(error);
@@ -198,10 +198,37 @@ app.get('/messages', authenticateToken, (req, res) => {
 });
 
 app.get('/messages/:id', authenticateToken, (req, res) => {
-    connection.query('select  id, chat_room_id, user_id, message from chat_messages where id = ?', [req.params.id], (error, results, fields) => {
+    connection.query('select  id, chat_room_id, user_id, message from chat_messages where id = ?', 
+                    [req.params.id], (error, results, fields) => {
         if(error) res.status(500).send('something went wrong');
         res.status(200).send(results);
     });
+});
+
+app.put('/messages', authenticateToken, (req, res) => {
+    const message = req.body.message;
+    const mid = req.body.mid;
+    const channelName = req.body.chanelName;
+    
+    let sql = `update messages set content = ?, is_edited = 1 where id = ?`;
+    try{
+        connection.query(sql, [message, mid], async(error, result, fields) => {
+            if(error) res.status(500).send('something went wrong');
+            else {
+                await pusher.trigger(channelName, "edit-message", {
+                    updatedMessage: message,
+                    mid: mid
+                }).catch(err => {
+                    console.log(err);
+                    res.status(500).send('something went wrong');
+                });
+                res.status(200).send({content: message});
+            } 
+        });
+    } catch(exc) {
+        console.log(exc);
+        res.status(500).send('something went wrong');
+    }
 });
 
 app.post("/pusher/auth", function (req, res) {
@@ -254,18 +281,18 @@ app.post("/sessions", authenticateToken, async(req, res) => {
                     };
 
     await pusher.trigger( channels, 'one-to-one-chat-request', eventData ).then(s => {
-        connection.query('select * from sessions where user1_id in (?, ?) and  user2_id in (?, ?)', [user_one_id, user_two_id, user_one_id, user_two_id], (error, result, fields) => {
+        connection.query('select * from sessions where user1_id in (?, ?) and  user2_id in (?, ?)', 
+                        [user_one_id, user_two_id, user_one_id, user_two_id], (error, result, fields) => {
             if(result.length > 0) {
-                let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, m.message_type as messageType, m.parent_message_id as parentMessageId,
-                 m.timestamps as time, u.name as uname, m.content as message, s.id as sessionId from chats chat inner join messages m on chat.message_id = m.id
-                inner join users u on m.from_user_id = u.id inner join sessions s on chat.session_id = s.id where s.id = ?`;
-                connection.query(sql1, [result[0].id], (error, results, fields) => {
+                connection.query(getOneToOneMessageQuery(), [result[0].id], (error, results, fields) => {
                     let messages = results;
+                    console.log(messages);
                     res.status(200).send({id: result[0].id, messages: messages});
                 });
         
             } else {
-                connection.query("insert into sessions (user1_id, user2_id) values(?, ?)", [user_one_id, user_two_id], (error, results, fields) => {
+                connection.query("insert into sessions (user1_id, user2_id) values(?, ?)", 
+                                [user_one_id, user_two_id], (error, results, fields) => {
                     if (error) res.status(500).send("something went wrong");
                     res.status(201).send({id: results.insertId, messages: []});
                 });
@@ -280,19 +307,17 @@ app.post("/sessionMessages", authenticateToken, (req, res) => {
     const user_one_id = req.body.user_one_id;
     const user_two_id = req.body.user_two_id;
 
-    connection.query('select * from sessions where user1_id in (?, ?) and  user2_id in (?, ?)', [user_one_id, user_two_id, user_one_id, user_two_id], (error, result, fields) => {
+    connection.query('select * from sessions where user1_id in (?, ?) and  user2_id in (?, ?)', 
+                    [user_one_id, user_two_id, user_one_id, user_two_id], (error, result, fields) => {
         if(result.length > 0) {
-            let sql1 = `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, m.message_type as messageType, m.parent_message_id as parentMessageId,
-             m.timestamps as time, u.name as uname,
-            m.content as message, s.id as sessionId from chats chat inner join messages m on chat.message_id = m.id
-            inner join users u on m.from_user_id = u.id inner join sessions s on chat.session_id = s.id where s.id = ?`;
-            connection.query(sql1, [result[0].id], (error, results, fields) => {
+            connection.query(getOneToOneMessageQuery(), [result[0].id], (error, results, fields) => {
                 let messages = results;
                 res.status(200).send({id: result[0].id, messages: messages});
             });
     
         } else {
-            connection.query("insert into sessions (user1_id, user2_id) values(?, ?)", [user_one_id, user_two_id], (error, results, fields) => {
+            connection.query("insert into sessions (user1_id, user2_id) values(?, ?)", 
+                            [user_one_id, user_two_id], (error, results, fields) => {
                 if (error) res.status(500).send("something went wrong");
                 res.status(201).send({id: results.insertId, messages: []});
             });
@@ -302,14 +327,7 @@ app.post("/sessionMessages", authenticateToken, (req, res) => {
 
 app.post("/groupMessages", authenticateToken, (req, res) => {
     const groupId = req.body.groupId;
-
-    let sql1 = `select m.id as mid, m.message_type as messageType, m.parent_message_id as parentMessageId,
-                m.content as message, m.timestamps as time, u.id as userId, u.name as uname, 
-                g.id as groupId, g.name as groupName from group_chats g 
-                inner join messages m on m.group_chat_id = g.id
-                inner join users u on m.from_user_id = u.id
-                where session_id is null and g.id = ?`;
-    connection.query(sql1, [groupId], (error, results, fields) => {
+    connection.query(getMessageQuery(), [groupId], (error, results, fields) => {
         if(error) res.status(500).send('something went wrong');
         let messages = results;
         res.status(200).send({messages: messages});
@@ -335,13 +353,7 @@ app.post("/groupMessagesWithChannel", authenticateToken, async(req, res) => {
         };
     await pusher.trigger(channels, 'group-chat-request', eventData);
 
-    let sql1 = `select m.id as mid, m.message_type as messageType, m.parent_message_id as parentMessageId,
-                m.content as message, m.timestamps as time, u.id as userId, u.name as uname, 
-                g.id as groupId, g.name as groupName from group_chats g 
-                inner join messages m on m.group_chat_id = g.id
-                inner join users u on m.from_user_id = u.id
-                where session_id is null and g.id = ?`;
-    connection.query(sql1, [groupId], (error, results, fields) => {
+    connection.query(getMessageQuery(), [groupId], (error, results, fields) => {
         if(error) res.status(500).send('something went wrong');
         let messages = results;
         res.status(200).send({messages: messages});
@@ -519,6 +531,27 @@ function queryPromise(query, insertValues) {
 
  function getPrivateChanelFromUsersId(userOneId, userTwoId){
     return userOneId > userTwoId ? `private-chat-${userOneId}-${userTwoId}` : `private-chat-${userTwoId}-${userOneId}`;
+ }
+
+ function getMessageQuery(){
+    return `select m.id as mid, m.message_type as messageType, bin(m.is_edited) as isEdited, m.parent_message_id as parentMessageId,
+    m.content as message, m.timestamps as time, u.id as userId, u.name as uname, 
+    g.id as groupId, g.name as groupName from group_chats g 
+    inner join messages m on m.group_chat_id = g.id
+    inner join users u on m.from_user_id = u.id
+    where session_id is null and g.id = ?`;
+ }
+
+ function getOneToOneMessageQuery(){
+    return `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, bin(m.is_edited) as isEdited,
+    m.message_type as messageType, m.parent_message_id as parentMessageId, m.timestamps as time, u.name as uname,
+    m.content as message, s.id as sessionId from chats chat inner join messages m on chat.message_id = m.id
+    inner join users u on m.from_user_id = u.id inner join sessions s on chat.session_id = s.id where s.id = ?`;
+ }
+
+ function insertMessageQuery(){
+    return `insert into messages (session_id, group_chat_id, content, from_user_id, message_type, parent_message_id) 
+            values(?, ?, ?, ?, ?, ?)`;
  }
 
 const port = process.env.port || 3000;
