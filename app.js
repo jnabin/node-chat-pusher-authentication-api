@@ -27,6 +27,16 @@ function generateAccestoken(user){
 app.get('/users', authenticateToken, (req, res) => {
     connection.query('select id, name from users', (error, results, fields) => {
         if(error) res.status(500).send('something went wrong');
+        console.log(results);
+        res.status(200).send(results);
+    });
+});
+
+app.get('/usersWithLatestMessage/:id', authenticateToken, (req, res) => {
+    let id = req.params.id;
+    connection.query(getUsersWithLatestMessageQuery(), [id, id, id], (error, results, fields) => {
+        if(error) res.status(500).send('something went wrong');
+        console.log(results);
         res.status(200).send(results);
     });
 });
@@ -552,6 +562,19 @@ function queryPromise(query, insertValues) {
  function insertMessageQuery(){
     return `insert into messages (session_id, group_chat_id, content, from_user_id, message_type, parent_message_id) 
             values(?, ?, ?, ?, ?, ?)`;
+ }
+
+ function getUsersWithLatestMessageQuery() {
+    return `select id, name, latestMessage.content, latestMessage.timestamps as time from users u left join (
+        select m.content, u.id as userId, m.timestamps from users u left join sessions s
+        on u.id in (s.user1_id, s.user2_id) inner join (
+        select m.id, m.content, m.session_id, m.timestamps from messages m left join messages b
+        on m.session_id = b.session_id and m.id < b.id 
+        where b.id is null 
+        ) m
+        on m.session_id = s.id 
+        where u.id != ? and (s.user1_id = ? or s.user2_id = ?)
+        ) latestMessage on u.id = latestMessage.userId`;
  }
 
 const port = process.env.port || 3000;
