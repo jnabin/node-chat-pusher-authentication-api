@@ -40,6 +40,7 @@ connection.connect(err => {
             message_type varchar(20) default 'direct',
             is_edited bit default 0,
             parent_message_id int null,
+            file_url varchar(1000) null,
             timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
 
         create table if not exists chats(
