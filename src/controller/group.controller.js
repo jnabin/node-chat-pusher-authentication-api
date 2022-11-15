@@ -4,9 +4,9 @@ const pusher = require('../../config');
 const groupMessages = (req, res) => {
     const groupId = req.body.groupId;
     connection.query(getMessageQuery(), [groupId], (error, results, fields) => {
-        if(error) res.status(500).send('something went wrong');
+        if(error) return res.status(500).send('something went wrong');
         let messages = results;
-        res.status(200).send({messages: messages});
+        return res.status(200).send({messages: messages});
     });
 };
 
@@ -30,9 +30,9 @@ const groupMessagesWithChannel = async(req, res) => {
     await pusher.trigger(channels, 'group-chat-request', eventData);
 
     connection.query(getMessageQuery(), [groupId], (error, results, fields) => {
-        if(error) res.status(500).send('something went wrong');
+        if(error) return res.status(500).send('something went wrong');
         let messages = results;
-        res.status(200).send({messages: messages});
+        return res.status(200).send({messages: messages});
     });
 };
 
@@ -44,8 +44,8 @@ const groups = (req, res) => {
     ORDER BY gc.name ASC`;
 
     connection.query(sql, (error, results, fields) => {
-        if(error) res.status(500).send('something went wrong');
-        res.status(200).send(results);
+        if(error) return res.status(500).send('something went wrong');
+        return res.status(200).send(results);
     });
 };
 
@@ -56,8 +56,8 @@ const getGroup = (req, res) => {
     INNER JOIN group_chats AS gc ON gu.group_id = gc.id
     where gc.id = ?`;
     connection.query(sql, [req.params.id], (error, results, fields) => {
-        if(error) res.status(500).send('something went wrong');
-        res.status(200).send(results);
+        if(error) return res.status(500).send('something went wrong');
+        return res.status(200).send(results);
     });
 };
 
@@ -68,9 +68,9 @@ const groupsByUser = (req, res) => {
     INNER JOIN group_chats AS gc ON gu.group_id = gc.id
     where u.id = ?`;
     connection.query(sql, [req.params.id], (error, results, fields) => {
-        if(error) res.status(500).send('something went wrong');
+        if(error) return res.status(500).send('something went wrong');
         console.log(results);
-        res.status(200).send(results);
+        return res.status(200).send(results);
     });
 };
 
@@ -81,15 +81,15 @@ const usersByGroup = (req, res) => {
     INNER JOIN group_chats AS gc ON gu.group_id = gc.id
     where gc.id = ?`;
     connection.query(sql, [req.params.id], (error, results, fields) => {
-        if(error) res.status(500).send('something went wrong');
-        res.status(200).send(results);
+        if(error) return res.status(500).send('something went wrong');
+        return res.status(200).send(results);
     });
 };
 
 const deleteGroup = (req, res) => {
     connection.query('delete from group_chats where id = ?', [req.params.id], (error, results, fields) => {
-        if(error) res.status(500).send('something went wrong');
-        res.status(204).send('deleted');
+        if(error) return res.status(500).send('something went wrong');
+        return res.status(204).send('deleted');
     });
 };
 
@@ -124,15 +124,15 @@ const createGroup = async(req, res) => {
                     );
                 })
             ).then(e => {
-                res.status(200).send(groupId.toString());
+                return res.status(200).send(groupId.toString());
             }).catch(err => {
                 console.log(err);
-                res.status(500).send('something went wrong');
+                return res.status(500).send('something went wrong');
             });
         });
     } catch(exc) {
         console.log(exc);
-        res.status(500).send('something went wrong');
+        return res.status(500).send('something went wrong');
     }
 };
 
@@ -149,7 +149,7 @@ const updateGroup = (req, res) => {
                 await Promise.all(queryPromise('delete from groups_users where group_id = ?', [groupId]))
                 .catch(err => {
                     console.log(err);
-                    res.status(500).send('something went wrong');
+                    return res.status(500).send('something went wrong');
                 });
                 await Promise.all(
                     userIds.map((_, i) => {
@@ -159,17 +159,17 @@ const updateGroup = (req, res) => {
                     })
                 ).catch(err => {
                     console.log(err);
-                    res.status(500).send('something went wrong');
+                    return res.status(500).send('something went wrong');
                 });
 
-                res.status(200).send('updated');
+                return res.status(200).send('updated');
             } else {
-                res.status(200).send('updated');
+                return res.status(200).send('updated');
             }
         });
     } catch(exc) {
         console.log(exc);
-        res.status(500).send('something went wrong');
+        return res.status(500).send('something went wrong');
     }
 };
 
@@ -179,7 +179,7 @@ function getMessageQuery(){
     g.id as groupId, g.name as groupName from group_chats g 
     inner join messages m on m.group_chat_id = g.id
     inner join users u on m.from_user_id = u.id
-    where session_id is null and g.id = ?`;
+    where session_id is null and g.id = ? order by m.id`;
  }
 
  function queryPromise(query, insertValues) {

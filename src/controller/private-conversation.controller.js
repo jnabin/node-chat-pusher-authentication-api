@@ -21,19 +21,19 @@ const privateMessages = async(req, res) => {
                 connection.query(getOneToOneMessageQuery(), [result[0].id], (error, results, fields) => {
                     let messages = results;
                     //console.log(messages);
-                    res.status(200).send({id: result[0].id, messages: messages});
+                    return res.status(200).send({id: result[0].id, messages: messages});
                 });
         
             } else {
                 connection.query("insert into sessions (user1_id, user2_id) values(?, ?)", 
                                 [user_one_id, user_two_id], (error, results, fields) => {
-                    if (error) res.status(500).send("something went wrong");
-                    res.status(201).send({id: results.insertId, messages: []});
+                    if (error) return res.status(500).send("something went wrong");
+                    return res.status(201).send({id: results.insertId, messages: []});
                 });
             }
         });
     }).catch(e => {
-        res.status(500).send('something went wrong');
+        return res.status(500).send('something went wrong');
     });
 };
 
@@ -46,14 +46,14 @@ const requestPrivateMessage = (req, res) => {
         if(result.length > 0) {
             connection.query(getOneToOneMessageQuery(), [result[0].id], (error, results, fields) => {
                 let messages = results;
-                res.status(200).send({id: result[0].id, messages: messages});
+                return res.status(200).send({id: result[0].id, messages: messages});
             });
     
         } else {
             connection.query("insert into sessions (user1_id, user2_id) values(?, ?)", 
                             [user_one_id, user_two_id], (error, results, fields) => {
-                if (error) res.status(500).send("something went wrong");
-                res.status(201).send({id: results.insertId, messages: []});
+                if (error) return res.status(500).send("something went wrong");
+                return res.status(201).send({id: results.insertId, messages: []});
             });
         }
     });
@@ -63,7 +63,7 @@ function getOneToOneMessageQuery(){
     return `select chat.id as cid, chat.user_id as userid, chat.type as usertype, m.id as mid, m.file_url as fileUrl, bin(m.is_edited) as isEdited,
     m.message_type as messageType, m.parent_message_id as parentMessageId, m.timestamps as time, u.name as uname,
     m.content as message, s.id as sessionId from chats chat inner join messages m on chat.message_id = m.id
-    inner join users u on m.from_user_id = u.id inner join sessions s on chat.session_id = s.id where s.id = ?`;
+    inner join users u on m.from_user_id = u.id inner join sessions s on chat.session_id = s.id where s.id = ? order by m.id`;
 }
 
 function getPrivateChanelFromUsersId(userOneId, userTwoId){

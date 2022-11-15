@@ -19,18 +19,6 @@ connection.connect(err => {
         password varchar(2000) not null,
         timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
 
-        create table if not exists chat_rooms(
-        id int primary key auto_increment,
-        name varchar(255) not null,
-        timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
-
-        create table if not exists chat_messages(
-        id int primary key auto_increment,
-        chat_room_id int not null,
-        user_id int not null,
-        message varchar(8000) not null,
-        timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
-
         create table if not exists messages(
             id int primary key auto_increment,
             session_id int null,

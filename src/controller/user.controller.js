@@ -3,9 +3,9 @@ const bcrypt = require('bcrypt');
 
 const allUsers = (req, res) => {
     connection.query('select id, name from users', (error, results, fields) => {
-        if(error) res.status(500).send('something went wrong');
+        if(error) return res.status(500).send('something went wrong');
         //console.log(results);
-        res.status(200).send(results);
+        return res.status(200).send(results);
     });
 };
 
@@ -14,24 +14,24 @@ const userWithLatestMessage = (req, res) => {
     connection.query(getUsersWithLatestMessageQuery(), [id, id, id], (error, results, fields) => {
         if(error) {
             console.log(error);
-            res.status(500).send('something went wrong');
+            return res.status(500).send('something went wrong');
         } 
         //console.log(results);
-        res.status(200).send(results);
+        return res.status(200).send(results);
     });
 };
 
 const getUser = (req, res) => {
     connection.query('select id, name from users where id = ?', [req.params.id], (error, results, fields) => {
-        if(error) res.status(500).send('something went wrong');
-        res.status(200).send(results);
+        if(error) return res.status(500).send('something went wrong');
+        return res.status(200).send(results);
     });
 };
 
 const deleteUser = (req, res) => {
     connection.query('delete from users where id = ?', [req.params.id], (error, results, fields) => {
-        if(error) res.status(500).send('something went wrong');
-        res.status(204).send('deleted');
+        if(error) return res.status(500).send('something went wrong');
+        return res.status(204).send('deleted');
     });
 };
 
@@ -40,13 +40,13 @@ const createUser = async(req, res) => {
         const hashedPassword = await bcrypt.hash(req.body.password, 10);
         connection.query(`insert into users (name, password) values(?, ?)`, [req.body.name, hashedPassword], 
         (error, results, fields) => {
-            if(error) res.status(500).send('something went wrong');
+            if(error) return res.status(500).send('something went wrong');
             let user = {id: results.insertId, name: req.body.name}
-            res.status(201).send(user);
+            return res.status(201).send(user);
         });
     } catch(exc) {
         console.log(exc);
-        res.status(500).send('something went wrong');
+        return res.status(500).send('something went wrong');
     }
 }
 

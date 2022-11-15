@@ -15,15 +15,15 @@ const login = async(req, res) => {
                     const refreshToken = jwt.sign({name: user.name, password: user.password}, process.env.REFRESH_TOKEN_SECRET);
                     refreshTokens.push(refreshToken);
                     let expiresIn = addMinutes(50);
-                    res.status(200).send({name: user.name, id: user.id, accessToken: accessToken, refreshToken: refreshToken, expiresIn: expiresIn});
+                    return res.status(200).send({name: user.name, id: user.id, accessToken: accessToken, refreshToken: refreshToken, expiresIn: expiresIn});
                 } 
-                else res.status(400).send('invalid password');
+                else return res.status(400).send('invalid password');
             } catch (exc) {
                 console.log(exc);
-                res.status(500).send('something went wrong');
+                return res.status(500).send('something went wrong');
             }
         } else {
-            res.status(400).send('invalid name');
+            return res.status(400).send('invalid name');
         }
     });
 };
@@ -38,9 +38,9 @@ const createToken = (req, res) => {
     if (!refreshToken) return res.sendStatus(401);
     if(!refreshTokens.includes(refreshToken)) return res.sendStatus(403);
     jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
-        if (err) res.sendStatus(403);
+        if (err) return res.sendStatus(403);
         const accessToken = generateAccestoken({name: user.name, password: user.password})
-        res.status(200).send({accessToken: accessToken});
+        return res.status(200).send({accessToken: accessToken});
     });
 };
 

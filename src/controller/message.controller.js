@@ -27,7 +27,7 @@ const sendMessage = async(req, res) => {
     async(error, results, fields) => {
         console.log(error);
         console.log(results);
-        if (error) res.status(500).send("something went wrong");
+        if (error) return res.status(500).send("something went wrong");
 
         let sql = "insert into chats (session_id, message_id, user_id, type) values(?, ?, ?, ?)"
         const mid = results.insertId;
@@ -43,19 +43,19 @@ const sendMessage = async(req, res) => {
             fileUrl: fileUrl
         }).catch(err => {
             console.log(err);
-            res.status(500).send('something went wrong');
+            return res.status(500).send('something went wrong');
         });
 
-        if(sessionId == null) res.status(201).send(mid.toString());
+        if(sessionId == null) return res.status(201).send(mid.toString());
 
         else {
             connection.query(sql, [sessionId, mid, fromUserId, 0], 
                 (error, results, fields) => {
-                    if (error) res.status(500).send('something went wrong');
+                    if (error) return res.status(500).send('something went wrong');
                     connection.query(sql, [sessionId, mid, toUserId, 1], 
                         (error, results, fields) => {
-                            if (error) res.status(500).send('something went wrong');
-                            res.status(201).send(mid.toString());
+                            if (error) return res.status(500).send('something went wrong');
+                            return res.status(201).send(mid.toString());
                         });
                 });
         }
@@ -66,16 +66,16 @@ const sendMessage = async(req, res) => {
 
 const allMessages = (req, res) => {
     connection.query('select id, chat_room_id, user_id, message from chat_messages', (error, results, fields) => {
-        if(error) res.status(500).send('something went wrong');
-        res.status(200).send(results);
+        if(error) return res.status(500).send('something went wrong');
+        return res.status(200).send(results);
     });
 };
 
 const getMessage = (req, res) => {
     connection.query('select  id, chat_room_id, user_id, message from chat_messages where id = ?', 
                     [req.params.id], (error, results, fields) => {
-        if(error) res.status(500).send('something went wrong');
-        res.status(200).send(results);
+        if(error) return res.status(500).send('something went wrong');
+        return res.status(200).send(results);
     });
 };
 
@@ -87,21 +87,21 @@ const updateMessage = (req, res) => {
     let sql = `update messages set content = ?, is_edited = 1 where id = ?`;
     try{
         connection.query(sql, [message, mid], async(error, result, fields) => {
-            if(error) res.status(500).send('something went wrong');
+            if(error) return res.status(500).send('something went wrong');
             else {
                 await pusher.trigger(channelName, "edit-message", {
                     updatedMessage: message,
                     mid: mid
                 }).catch(err => {
                     console.log(err);
-                    res.status(500).send('something went wrong');
+                    return res.status(500).send('something went wrong');
                 });
-                res.status(200).send({content: message});
+                return res.status(200).send({content: message});
             } 
         });
     } catch(exc) {
         console.log(exc);
-        res.status(500).send('something went wrong');
+        return res.status(500).send('something went wrong');
     }
 };
 

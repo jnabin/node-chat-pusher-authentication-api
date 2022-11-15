@@ -1,11 +1,12 @@
 const pusher = require('../../config');
 
 const userTyping = function(req, res) {
+    console.log(req.body);
     const username = req.body.username;
     const fromUser = req.body.fromUserId;
     const channelName = req.body.chanelName ? req.body.chanelName : getPrivateChanelFromUsersId(fromUserId, toUserId);
 
-    pusher.trigger(channelName, 'user_typing', {username: username, userId: fromUser});
+    pusher.trigger([channelName, 'presence-forum'], 'user_typing', {username: username, userId: fromUser});
     res.status(200).send();
 };
 
