@@ -25,8 +25,6 @@ const sendMessage = async(req, res) => {
     connection.query(insertMessageQuery(), 
     [sessionId, groupChartId, message, fromUserId, messageType, parentMessageId, fileUrl], 
     async(error, results, fields) => {
-        console.log(error);
-        console.log(results);
         if (error) return res.status(500).send("something went wrong");
 
         let sql = "insert into chats (session_id, message_id, user_id, type) values(?, ?, ?, ?)"

@@ -3,10 +3,10 @@ const pusher = require('../../config');
 
 const groupMessages = (req, res) => {
     const groupId = req.body.groupId;
-    connection.query(getMessageQuery(), [groupId], (error, results, fields) => {
-        if(error) return res.status(500).send('something went wrong');
-        let messages = results;
+    fetchMessageWithReacts(groupId).then(messages => {
         return res.status(200).send({messages: messages});
+    }).catch(err => {
+        return res.status(500).send('something went wrong');
     });
 };
 
@@ -29,10 +29,10 @@ const groupMessagesWithChannel = async(req, res) => {
         };
     await pusher.trigger(channels, 'group-chat-request', eventData);
 
-    connection.query(getMessageQuery(), [groupId], (error, results, fields) => {
-        if(error) return res.status(500).send('something went wrong');
-        let messages = results;
+    fetchMessageWithReacts(groupId).then(messages => {
         return res.status(200).send({messages: messages});
+    }).catch(err => {
+        return res.status(500).send('something went wrong');
     });
 };
 
@@ -181,6 +181,23 @@ function getMessageQuery(){
     inner join users u on m.from_user_id = u.id
     where session_id is null and g.id = ? order by m.id`;
  }
+
+ function fetchMessageWithReacts(groupId){
+    return new Promise((resolve, reject) => {
+        connection.query(getMessageQuery(), [groupId], (error, results, fields) => {
+            let messages = results;
+            let uniqueMessageIds = [...new Set( messages.map(x => x.mid))];
+            let reactSql = `select * from reacts where message_id in (${uniqueMessageIds})`;
+            connection.query(reactSql, async (error, reactResult, fields) => {
+                if(error) reject(err);
+                messages.forEach(m => {
+                    m.reacts = reactResult.filter(x => x.message_id == m.mid);
+                });
+                return resolve(messages);
+            });
+        });
+    });
+}
 
  function queryPromise(query, insertValues) {
     return new Promise((resolve, reject) => {

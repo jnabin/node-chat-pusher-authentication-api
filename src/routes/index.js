@@ -7,6 +7,7 @@ const groupController = require('../controller/group.controller');
 const userController = require('../controller/user.controller');
 const authController = require('../controller/auth.controller');
 const pusherController = require('../controller/pusher.controller');
+const reactController = require('../controller/react.controller');
 const privateConversationController = require('../controller/private-conversation.controller');
 const authenticateToken = auth.authenticateToken;
 
@@ -46,6 +47,8 @@ let routes = (app) => {
     router.post('/userTyping', authenticateToken, pusherController.userTyping);
     router.post("/pusher/auth", pusherController.authorizePusher);
     router.post("/pusher/user-auth", pusherController.authenticatePusher);
+
+    router.post('/reacts', authenticateToken, reactController.react);
 
     app.use(router);
 };

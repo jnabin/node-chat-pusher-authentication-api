@@ -55,6 +55,13 @@ connection.connect(err => {
             user_id int not null,
             group_id int not null,
             timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
+
+            create table if not exists reacts(
+                id int primary key auto_increment,
+                react_content varchar(100) not null,
+                message_id int not null,
+                user_id int not null,
+                timestamps TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP);
     `;
 
     connection.query(createTables, (error, results, fields) => {

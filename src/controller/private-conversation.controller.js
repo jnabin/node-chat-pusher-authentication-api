@@ -18,10 +18,10 @@ const privateMessages = async(req, res) => {
         connection.query('select * from sessions where user1_id in (?, ?) and  user2_id in (?, ?)', 
                         [user_one_id, user_two_id, user_one_id, user_two_id], (error, result, fields) => {
             if(result.length > 0) {
-                connection.query(getOneToOneMessageQuery(), [result[0].id], (error, results, fields) => {
-                    let messages = results;
-                    //console.log(messages);
+                fetchMessageWithReacts(result[0]).then(messages => {
                     return res.status(200).send({id: result[0].id, messages: messages});
+                }).catch(err => {
+                    return res.status(500).send('something went wrong');
                 });
         
             } else {
@@ -44,9 +44,10 @@ const requestPrivateMessage = (req, res) => {
     connection.query('select * from sessions where user1_id in (?, ?) and  user2_id in (?, ?)', 
                     [user_one_id, user_two_id, user_one_id, user_two_id], (error, result, fields) => {
         if(result.length > 0) {
-            connection.query(getOneToOneMessageQuery(), [result[0].id], (error, results, fields) => {
-                let messages = results;
+            fetchMessageWithReacts(result[0]).then(messages => {
                 return res.status(200).send({id: result[0].id, messages: messages});
+            }).catch(err => {
+                return res.status(500).send('something went wrong');
             });
     
         } else {
@@ -64,6 +65,23 @@ function getOneToOneMessageQuery(){
     m.message_type as messageType, m.parent_message_id as parentMessageId, m.timestamps as time, u.name as uname,
     m.content as message, s.id as sessionId from chats chat inner join messages m on chat.message_id = m.id
     inner join users u on m.from_user_id = u.id inner join sessions s on chat.session_id = s.id where s.id = ? order by m.id`;
+}
+
+function fetchMessageWithReacts(session){
+    return new Promise((resolve, reject) => {
+        connection.query(getOneToOneMessageQuery(), [session.id], (error, results, fields) => {
+            let messages = results;
+            let uniqueMessageIds = [...new Set( messages.map(x => x.mid))];
+            let reactSql = `select * from reacts where message_id in (${uniqueMessageIds})`;
+            connection.query(reactSql, async (error, reactResult, fields) => {
+                if(error) reject(err);
+                messages.forEach(m => {
+                    m.reacts = reactResult.filter(x => x.message_id == m.mid);
+                });
+                return resolve(messages);
+            });
+        });
+    });
 }
 
 function getPrivateChanelFromUsersId(userOneId, userTwoId){
