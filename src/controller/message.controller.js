@@ -11,6 +11,7 @@ const sendMessage = async(req, res) => {
     const messageType = req.body.messageType;
     const parentMessageId = req.body.parentMessageId;
     const fileUrl = req.body.fileUrl;
+    const isGroup = req.body.isGroup;
     const channelName = req.body.chanelName ? req.body.chanelName : getPrivateChanelFromUsersId(fromUserId, toUserId);
 
     let event = sessionId == null ? `group-new-message` : `new-message-to-${toUserId}`;
@@ -44,7 +45,7 @@ const sendMessage = async(req, res) => {
             return res.status(500).send('something went wrong');
         });
 
-        if(sessionId == null) return res.status(201).send(mid.toString());
+        if(sessionId == null) return res.status(201).send({message: message, mid: mid, conversationId: isGroup ? groupChartId : toUserId, isGroup: isGroup});
 
         else {
             connection.query(sql, [sessionId, mid, fromUserId, 0], 
@@ -53,7 +54,7 @@ const sendMessage = async(req, res) => {
                     connection.query(sql, [sessionId, mid, toUserId, 1], 
                         (error, results, fields) => {
                             if (error) return res.status(500).send('something went wrong');
-                            return res.status(201).send(mid.toString());
+                            return res.status(201).send({message: message, mid: mid, conversationId: isGroup ? groupChartId : toUserId, isGroup: isGroup});
                         });
                 });
         }

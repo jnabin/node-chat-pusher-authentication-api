@@ -16,6 +16,7 @@ const groupMessagesWithChannel = async(req, res) => {
     const fromUserId = req.body.fromUserId;
 
     var channels = [];
+    console.log(userIds);
     userIds.forEach(id => {
         channels.push(`private-notifications-${id}`);
     })
@@ -62,20 +63,26 @@ const getGroup = (req, res) => {
 };
 
 const groupsByUser = (req, res) => {
-    let sql = `SELECT gc.id as groupId, gc.name as groupName
-    FROM users AS u
-    INNER JOIN groups_users AS gu ON u.id = gu.user_id
-    INNER JOIN group_chats AS gc ON gu.group_id = gc.id
-    where u.id = ?`;
-    connection.query(sql, [req.params.id], (error, results, fields) => {
+    connection.query(getGroupsWithLatestMessageQuery(), [req.params.id], (error, results, fields) => {
         if(error) return res.status(500).send('something went wrong');
-        console.log(results);
-        return res.status(200).send(results);
+        let uniqueGroupIds = [...new Set( results.map(x => x.groupId))];
+        let groupUsersSql = `SELECT u.id as id, u.name as name, gc.id AS groupId
+                            FROM users AS u
+                            INNER JOIN groups_users AS gu ON u.id = gu.user_id
+                            INNER JOIN group_chats AS gc ON gu.group_id = gc.id
+                            where gc.id in (${uniqueGroupIds});`;
+        connection.query(groupUsersSql, (error, userResults, fields) => {
+            if(error) return res.status(500).send('something went wrong');
+            results.forEach(g => {
+                g.users = userResults.filter(x => x.groupId == g.groupId);
+            });
+            return res.status(200).send(results);
+        });
     });
 };
 
 const usersByGroup = (req, res) => {
-    let sql = `SELECT u.id as userId, u.name as userName
+    let sql = `SELECT u.id as id, u.name as name
     FROM users AS u
     INNER JOIN groups_users AS gu ON u.id = gu.user_id
     INNER JOIN group_chats AS gc ON gu.group_id = gc.id
@@ -98,7 +105,7 @@ const createGroup = async(req, res) => {
         const userIds = req.body.userIds;
         const fromUserId = req.body.fromUserId;
 
-        var channels = [];
+        let channels = [];
         userIds.forEach(id => {
             channels.push(`private-notifications-${id}`);
         })
@@ -146,25 +153,58 @@ const updateGroup = (req, res) => {
         connection.query('update group_chats set name = ? where id = ?', [name, groupId], async(error, results, fields) => {
             if(error) res.status(500).send('something went wrong');
             if(isUpdateUsers) {
-                await Promise.all(queryPromise('delete from groups_users where group_id = ?', [groupId]))
-                .catch(err => {
-                    console.log(err);
-                    return res.status(500).send('something went wrong');
-                });
-                await Promise.all(
-                    userIds.map((_, i) => {
-                        return queryPromise(
-                            `insert into groups_users (user_id, group_id) values(?, ?)`, [userIds[i], groupId]
-                        );
-                    })
-                ).catch(err => {
-                    console.log(err);
-                    return res.status(500).send('something went wrong');
-                });
+                connection.query(`SELECT user_id as id FROM groups_users where group_id = ?`, [groupId], (error, results, fields) => {
+                   let previusIds = results.map(x => x.id);
+                   let newIds = [];
+                   let deletedIds = [];
+                    userIds.forEach(id => {
+                        if(!previusIds.includes(id)) newIds.push(id)
+                    });
+                    console.log('sdjdsjfhsd fusd fu',previusIds);
+                    previusIds.forEach(id => {
+                        if(!userIds.includes(id)) deletedIds.push(id)
+                    });
+                    connection.query('delete from groups_users where group_id = ?', [groupId], async(error, results, fields) => {
+                        if(error) return res.status(500).send('something went wrong');
+                        await Promise.all(
+                            userIds.map((_, i) => {
+                                return queryPromise(
+                                    `insert into groups_users (user_id, group_id) values(?, ?)`, [userIds[i], groupId]
+                                );
+                            })
+                        ).catch(err => {
+                            console.log(err);
+                            return res.status(500).send('something went wrong');
+                        });
+                        let newChannels = [];
+                        let deleteChannels = [];
+                        newIds.forEach(id => {
+                            newChannels.push(`private-notifications-${id}`);
+                        });
+                        deletedIds.forEach(id => {
+                            deleteChannels.push(`private-notifications-${id}`);
+                        });
+                        let newEventData = {
+                            'channel_name': `private-group-chat-${groupId}`,
+                            'initiated_by': null,
+                            'chat_with_ids'   : userIds,
+                            'groupId': groupId,
+                            'groupName': name,
+                            'newGroup' : true
+                        };
+                        let deleteEventData = {
+                            'groupId': groupId,
+                            'groupName': name,
+                            'newGroup' : true
+                        };
+                        if(newChannels.length > 0) await pusher.trigger(newChannels, 'group-chat-request', newEventData);
+                        if(deleteChannels.length > 0) await pusher.trigger(deleteChannels, 'remove-group-chat-request', deleteEventData);
 
-                return res.status(200).send('updated');
+                        return res.status(200).send({m: 'updated', users: userIds, gid: groupId});
+                    });
+                });
             } else {
-                return res.status(200).send('updated');
+                return res.status(200).send({m: 'updated', userIds: userIds, gid: groupId});
             }
         });
     } catch(exc) {
@@ -180,6 +220,19 @@ function getMessageQuery(){
     inner join messages m on m.group_chat_id = g.id
     inner join users u on m.from_user_id = u.id
     where session_id is null and g.id = ? order by m.id`;
+ }
+
+function getGroupsWithLatestMessageQuery(){
+    return `SELECT gc.id as groupId, gc.name as groupName, latest.*
+    FROM users AS u
+    INNER JOIN groups_users AS gu ON u.id = gu.user_id
+    INNER JOIN group_chats AS gc ON gu.group_id = gc.id
+    left join (select m.id as messageId, m.content as latestMessage, m.group_chat_id, m.file_url, m.from_user_id, m.timestamps from messages m left join messages b
+	on m.group_chat_id = b.group_chat_id and m.id < b.id 
+	where b.id is null and m.session_id is null) latest
+    on gc.id = latest.group_chat_id
+    where u.id = ?
+    ORDER BY gc.id desc`;
  }
 
  function fetchMessageWithReacts(groupId){
