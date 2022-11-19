@@ -1,7 +1,6 @@
 const pusher = require('../../config');
 
 const userTyping = function(req, res) {
-    console.log(req.body);
     const username = req.body.username;
     const fromUser = req.body.fromUserId;
     const channelName = req.body.chanelName ? req.body.chanelName : getPrivateChanelFromUsersId(fromUserId, toUserId);
@@ -24,10 +23,10 @@ const authorizePusher = (req, res) => {
         };
 
         const authResponse = pusher.authorizeChannel(socketId, channel, presenceData);
-        res.send(authResponse);
+        res.status(200).send(authResponse);
     } else {
         const authResponse = pusher.authorizeChannel(socketId, channel);
-        res.send(authResponse);
+        res.status(200).send(authResponse);
     }
 }
 
@@ -42,7 +41,7 @@ const authenticatePusher = (req, res) => {
       }
     };
     const authResponse = pusher.authenticateUser(socketId, user);
-    res.send(authResponse);
+    res.status(200).send(authResponse);
   }
 
 function getPrivateChanelFromUsersId(userOneId, userTwoId){

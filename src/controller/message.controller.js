@@ -64,14 +64,14 @@ const sendMessage = async(req, res) => {
 };
 
 const allMessages = (req, res) => {
-    connection.query('select id, chat_room_id, user_id, message from chat_messages', (error, results, fields) => {
+    connection.query('select * from messages', (error, results, fields) => {
         if(error) return res.status(500).send('something went wrong');
         return res.status(200).send(results);
     });
 };
 
 const getMessage = (req, res) => {
-    connection.query('select  id, chat_room_id, user_id, message from chat_messages where id = ?', 
+    connection.query('select * from messages where id = ?', 
                     [req.params.id], (error, results, fields) => {
         if(error) return res.status(500).send('something went wrong');
         return res.status(200).send(results);

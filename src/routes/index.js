@@ -10,6 +10,9 @@ const pusherController = require('../controller/pusher.controller');
 const reactController = require('../controller/react.controller');
 const privateConversationController = require('../controller/private-conversation.controller');
 const authenticateToken = auth.authenticateToken;
+const swaggerUi = require('swagger-ui-express');
+const d = require('../swagger.json');
+const apiDocumentation = require('../docs/apidoc');
 
 let routes = (app) => {
     router.post("/upload", authenticateToken, fileController.upload);
@@ -49,6 +52,9 @@ let routes = (app) => {
     router.post("/pusher/user-auth", pusherController.authenticatePusher);
 
     router.post('/reacts', authenticateToken, reactController.react);
+
+    router.use('/documentation', swaggerUi.serve);
+    router.get('/documentation', swaggerUi.setup(apiDocumentation.apiDocumentation));
 
     app.use(router);
 };
